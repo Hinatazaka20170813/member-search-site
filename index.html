@@ -120,6 +120,7 @@
 
     <p class="description">
       名前・生年月日・星座・身長・出身地・血液型を入力して検索できます。
+      生年月日と身長は範囲指定できます。
       入力しなかった項目は検索条件から外されます。
     </p>
 
@@ -130,8 +131,13 @@
       </label>
 
       <label>
-        生年月日
-        <input id="birthdayInput" type="text" placeholder="例：2002、9月7日、2002年9月7日">
+        生年月日（開始）
+        <input id="birthdayFromInput" type="date">
+      </label>
+
+      <label>
+        生年月日（終了）
+        <input id="birthdayToInput" type="date">
       </label>
 
       <label>
@@ -140,8 +146,13 @@
       </label>
 
       <label>
-        身長
-        <input id="heightInput" type="text" placeholder="例：161.5、161.5cm">
+        身長（最小）
+        <input id="heightMinInput" type="number" step="0.1" placeholder="例：150">
+      </label>
+
+      <label>
+        身長（最大）
+        <input id="heightMaxInput" type="number" step="0.1" placeholder="例：170">
       </label>
 
       <label>
@@ -186,23 +197,6 @@
       return text.trim().replace(/\s+/g, "");
     }
 
-    function normalizeHeight(text) {
-      text = text.trim()
-        .replace("㎝", "cm")
-        .replace("ＣＭ", "cm")
-        .replace("ｃｍ", "cm");
-
-      if (!text) return "";
-
-      if (text === "不明") return "不明";
-
-      if (/^\d+(\.\d+)?$/.test(text)) {
-        return text + "cm";
-      }
-
-      return text;
-    }
-
     function normalizeBloodType(text) {
       text = text.trim().toUpperCase();
 
@@ -215,6 +209,44 @@
       }
 
       return text;
+    }
+
+    function birthdayToNumber(text) {
+      text = text.trim();
+
+      if (!text || text === "不明") return null;
+
+      // 入力欄 type="date" の形式：2002-09-07
+      let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+
+      // members.txt の形式：2002年9月7日
+      if (!match) {
+        match = text.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/);
+      }
+
+      if (!match) return null;
+
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+
+      return year * 10000 + month * 100 + day;
+    }
+
+    function heightToNumber(text) {
+      text = String(text).trim()
+        .replace(/cm/gi, "")
+        .replaceAll("㎝", "")
+        .replaceAll("ＣＭ", "")
+        .replaceAll("ｃｍ", "");
+
+      if (!text || text === "不明") return null;
+
+      const height = Number(text);
+
+      if (Number.isNaN(height)) return null;
+
+      return height;
     }
 
     function parseMembers(text) {
@@ -269,31 +301,68 @@
 
     function searchMembers() {
       const name = normalizeName(document.getElementById("nameInput").value);
-      const birthday = document.getElementById("birthdayInput").value.trim();
+
+      const birthdayFrom = birthdayToNumber(
+        document.getElementById("birthdayFromInput").value
+      );
+
+      const birthdayTo = birthdayToNumber(
+        document.getElementById("birthdayToInput").value
+      );
+
       const zodiac = document.getElementById("zodiacInput").value.trim();
-      const height = normalizeHeight(document.getElementById("heightInput").value);
+
+      const heightMin = heightToNumber(
+        document.getElementById("heightMinInput").value
+      );
+
+      const heightMax = heightToNumber(
+        document.getElementById("heightMaxInput").value
+      );
+
       const birthplace = document.getElementById("birthplaceInput").value.trim();
-      const bloodType = normalizeBloodType(document.getElementById("bloodTypeInput").value);
+
+      const bloodType = normalizeBloodType(
+        document.getElementById("bloodTypeInput").value
+      );
 
       const results = members.filter(member => {
         if (name && !normalizeName(member.name).includes(name)) {
           return false;
         }
 
-        // 例：「2002」「9月7日」「2002年9月7日」のどれでも検索可能
-        if (birthday && !member.birthday.includes(birthday)) {
-          return false;
+        const memberBirthday = birthdayToNumber(member.birthday);
+
+        if (birthdayFrom !== null) {
+          if (memberBirthday === null || memberBirthday < birthdayFrom) {
+            return false;
+          }
+        }
+
+        if (birthdayTo !== null) {
+          if (memberBirthday === null || memberBirthday > birthdayTo) {
+            return false;
+          }
         }
 
         if (zodiac && member.zodiac !== zodiac) {
           return false;
         }
 
-        if (height && normalizeHeight(member.height) !== height) {
-          return false;
+        const memberHeight = heightToNumber(member.height);
+
+        if (heightMin !== null) {
+          if (memberHeight === null || memberHeight < heightMin) {
+            return false;
+          }
         }
 
-        // 例：「大阪」でも「大阪府」にヒット
+        if (heightMax !== null) {
+          if (memberHeight === null || memberHeight > heightMax) {
+            return false;
+          }
+        }
+
         if (birthplace && !member.birthplace.includes(birthplace)) {
           return false;
         }
@@ -342,9 +411,15 @@
 
     function resetSearch() {
       document.getElementById("nameInput").value = "";
-      document.getElementById("birthdayInput").value = "";
+
+      document.getElementById("birthdayFromInput").value = "";
+      document.getElementById("birthdayToInput").value = "";
+
       document.getElementById("zodiacInput").value = "";
-      document.getElementById("heightInput").value = "";
+
+      document.getElementById("heightMinInput").value = "";
+      document.getElementById("heightMaxInput").value = "";
+
       document.getElementById("birthplaceInput").value = "";
       document.getElementById("bloodTypeInput").value = "";
 
